@@ -5,7 +5,7 @@ import (
 	"net"
 	"unsafe"
 
-	"github.com/OperatorFoundation/shapeshifter-transports/transports/obfs4"
+	"github.com/TunnelBear/shapeshifter-transports/transports/obfs4/v2"
 )
 
 var transports = map[int]*obfs4.Obfs4Transport{}
