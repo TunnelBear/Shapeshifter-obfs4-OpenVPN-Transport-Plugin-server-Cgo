@@ -4,6 +4,7 @@ import "C"
 import (
 	"net"
 	"unsafe"
+	"reflect"
 
 	"github.com/OperatorFoundation/shapeshifter-transports/transports/obfs4/v2"
 )
@@ -97,10 +98,11 @@ func Obfs4_write(listener_id int, buffer unsafe.Pointer, buffer_length C.int) in
 }
 
 //export Obfs4_read
-func Obfs4_read(listener_id int, buffer unsafe.Pointer, buffer_length C.int) int {
+func Obfs4_read(listener_id int, buffer unsafe.Pointer, buffer_length int) int {
 
 	var connection = conns[listener_id]
-	var bytesBuffer = C.GoBytes(buffer, buffer_length)
+	header := reflect.SliceHeader{uintptr(buffer), buffer_length, buffer_length}
+	bytesBuffer := *(*[]byte)(unsafe.Pointer(&header))
 
 	numberOfBytesRead, error := connection.Read(bytesBuffer)
 
