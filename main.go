@@ -99,7 +99,6 @@ func Obfs4_write(listener_id int, buffer unsafe.Pointer, buffer_length C.int) in
 
 //export Obfs4_read
 func Obfs4_read(listener_id int, buffer unsafe.Pointer, buffer_length int) int {
-
 	var connection = conns[listener_id]
 	header := reflect.SliceHeader{uintptr(buffer), buffer_length, buffer_length}
 	bytesBuffer := *(*[]byte)(unsafe.Pointer(&header))
@@ -119,6 +118,25 @@ func Obfs4_close_connection(listener_id int) {
 	var connection = conns[listener_id]
 	connection.Close()
 	delete(conns, listener_id)
+}
+
+//export Obfs4_get_file_descriptor
+func Obfs4_get_file_descriptor(listener_id int) int {
+  var connection = conss[listener_id]
+	value := reflect.ValueOf(connection)
+	netFD := reflect.Indirect(reflect.Indirect(value).FieldByName("fd"))
+	fd := int(netFD.FieldByName("sysfd").Int())
+	return fd
+}
+
+//export Obfs4_get_file_descriptor2
+func Obfs4_get_file_descriptor2(listener_id int) int {
+  var connection = conss[listener_id]
+	value := reflect.ValueOf(connection)
+	netFD := reflect.Indirect(reflect.Indirect(value).FieldByName("fd"))
+  pfd := reflect.Indirect(netFD.FieldByName("pfd"))
+	fd := int(pfd.FieldByName("Sysfd").Int())
+	return fd
 }
 
 func main() {}
