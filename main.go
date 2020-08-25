@@ -1,8 +1,11 @@
 package main
 
+// #include <stdint.h>
+// void call_fd_callback(void* func_ptr, void* class_ptr, uintptr_t fd);
 import "C"
 import (
 	"net"
+	//"syscall"
 	"unsafe"
 	"reflect"
 
@@ -12,6 +15,7 @@ import (
 var transports = map[int]*obfs4.Transport{}
 var listeners = map[int]net.Listener{}
 var conns = map[int]net.Conn{}
+var tcpConns = map[int]*net.TCPConn{}  // store connections to get RawConn for the file descriptor
 var nextID = 0
 
 //export Obfs4_initialize_server
@@ -34,7 +38,7 @@ func Obfs4_initialize_server(stateDir *C.char) (listenerKey int) {
 //export Obfs4_initialize_client
 func Obfs4_initialize_client(cert *C.char, iatMode int) (listenerKey int) {
 	certString := C.GoString(cert)
-	transport, _ := obfs4.NewObfs4Client(certString, iatMode, nil) // TODO: support dialer
+	transport, _ := obfs4.NewObfs4Client(certString, iatMode, tcpDialer{nextID}) 
 	transports[nextID] = transport
 
 	// This is the return value
@@ -120,23 +124,49 @@ func Obfs4_close_connection(listener_id int) {
 	delete(conns, listener_id)
 }
 
-//export Obfs4_get_file_descriptor
-func Obfs4_get_file_descriptor(listener_id int) int {
-  var connection = conss[listener_id]
-	value := reflect.ValueOf(connection)
-	netFD := reflect.Indirect(reflect.Indirect(value).FieldByName("fd"))
-	fd := int(netFD.FieldByName("sysfd").Int())
-	return fd
+
+//export Obfs4_get_fd
+func Obfs4_get_fd(listener_id int, function unsafe.Pointer, class_ptr unsafe.Pointer) int {
+  conn := tcpConns[listener_id]
+  rawConn, error := conn.SyscallConn()
+
+  if error != nil {
+    return -1
+  }
+
+  error = rawConn.Control(func (fd uintptr) {
+    C.call_fd_callback(function, class_ptr, C.uintptr_t(fd)) 
+  })
+
+  if error != nil {
+    return -1
+  }
+
+  return 0
 }
 
-//export Obfs4_get_file_descriptor2
-func Obfs4_get_file_descriptor2(listener_id int) int {
-  var connection = conss[listener_id]
-	value := reflect.ValueOf(connection)
-	netFD := reflect.Indirect(reflect.Indirect(value).FieldByName("fd"))
-  pfd := reflect.Indirect(netFD.FieldByName("pfd"))
-	fd := int(pfd.FieldByName("Sysfd").Int())
-	return fd
+
+// custom dialer to store the tcpConn + get the file descriptor
+type tcpDialer struct {
+  id int // transport id
+}
+
+func (d tcpDialer) Dial(network, addr string) (c net.Conn, err error) {
+  tcpAddr, error := net.ResolveTCPAddr(network, addr)
+
+  if error != nil {
+    return nil, error
+  }
+
+  conn, error := net.DialTCP(network, nil, tcpAddr)
+
+  if error != nil {
+    return nil, error
+  }
+
+  tcpConns[d.id] = conn
+
+  return conn, nil
 }
 
 func main() {}
