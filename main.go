@@ -126,6 +126,10 @@ func Obfs4_close_connection(listener_id int) {
 
 //export Obfs4_get_fd
 func Obfs4_get_fd(listener_id int, function unsafe.Pointer, class_ptr unsafe.Pointer) int {
+  if function == nil {
+    return -1
+  }
+
   conn := tcpConns[listener_id]
   rawConn, error := conn.SyscallConn()
 
