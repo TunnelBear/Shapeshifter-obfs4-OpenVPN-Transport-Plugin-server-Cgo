@@ -20,7 +20,28 @@ func Obfs4_initialize_server(stateDir *C.char) (listenerKey int) {
 	transports[nextID] = transport
 
 	// This is the return value
-	listenerKey = nextID
+	if transport != nil {
+		listenerKey = nextID
+	} else {
+		listenerKey = -1
+	}
+
+	nextID += 1
+  return
+}
+
+//export Obfs4_initialize_client
+func Obfs4_initialize_client(cert *C.char, iatMode int) (listenerKey int) {
+	certString := C.GoString(cert)
+	transport, _ := obfs4.NewObfs4Client(certString, iatMode, nil)
+	transports[nextID] = transport
+
+	// This is the return value
+	if transport != nil {
+		listenerKey = nextID
+	} else {
+		listenerKey = -1
+	}
 
 	nextID += 1
 	return
@@ -33,6 +54,21 @@ func Obfs4_listen(id int, address_string *C.char) {
 	var transport = transports[id]
 	var listener = transport.Listen(goAddressString)
 	listeners[id] = listener
+}
+
+//export Obfs4_dial
+func Obfs4_dial(id int, address_string *C.char) int {
+	goAddressString := C.GoString(address_string)
+
+	var transport = transports[id]
+	var conn, err = transport.Dial(goAddressString)
+
+	if err != nil {
+		return -1
+	} else {
+		conns[id] = conn
+		return 0
+	}
 }
 
 //export Obfs4_accept
@@ -90,6 +126,29 @@ func Obfs4_close_connection(listener_id int) {
 	}
 	connection.Close()
 	delete(conns, listener_id)
+}
+
+//export Obfs4_native_handle
+func Obfs4_native_handle(listener_id int) int {
+  baseConn := conns[listener_id]
+
+  // Use reflection to get the internal net.Conn object + convert it to a TCPConn. There is not currently a way 
+  // to get the file descriptor from a plain net.Conn 
+  reflectedConn := reflect.ValueOf(baseConn)
+  conn := reflect.Indirect(reflectedConn).Field(0).Interface().(*net.TCPConn)
+
+  if conn == nil {
+    return -1
+  }
+
+  file, error := conn.File()
+
+  if error != nil {
+    return -1
+  }
+
+  fd := file.Fd();
+  return int(fd) // casting uintptr -> int is safe because a system descriptor is an int.
 }
 
 func main() {}
